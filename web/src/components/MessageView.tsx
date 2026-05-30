@@ -39,24 +39,38 @@ function buildIframeDoc(html: string): string {
   return `<!doctype html><html><head><meta charset="utf-8"><base target="_blank"><style>${APP_BASE_STYLE}</style></head><body>${html}</body></html>`;
 }
 
-// `zoom` on documentElement actually shrinks the layout box (unlike transform: scale),
-// works in Chrome/Edge/Safari and Firefox 126+. iframes ignore viewport meta, so this
-// is the reliable way to fit wide email HTML into a narrow iframe.
+// iframes ignore viewport meta, and CSS `zoom` is flaky inside iframes. Reliable approach:
+// wrap all body children in a div, measure its natural width, scale it with CSS transform,
+// and set body height to the scaled height (transform doesn't shrink the layout box).
 function fitIframe(iframe: HTMLIFrameElement) {
   const doc = iframe.contentDocument;
   if (!doc || !doc.body) return;
-  const html = doc.documentElement as HTMLElement & { style: CSSStyleDeclaration };
-  html.style.zoom = '';
-  const cw = iframe.clientWidth;
-  if (cw <= 0) return;
-  const sw = Math.max(
-    doc.body.scrollWidth,
-    doc.documentElement.scrollWidth,
-    doc.body.offsetWidth,
-  );
-  if (sw > cw + 2) {
-    html.style.zoom = String(cw / sw);
+  const body = doc.body as HTMLElement;
+
+  let wrap = doc.getElementById('__gm_fit__') as HTMLElement | null;
+  if (!wrap) {
+    wrap = doc.createElement('div');
+    wrap.id = '__gm_fit__';
+    wrap.style.transformOrigin = '0 0';
+    while (body.firstChild) wrap.appendChild(body.firstChild);
+    body.appendChild(wrap);
   }
+
+  wrap.style.transform = '';
+  wrap.style.width = '';
+  body.style.height = '';
+  body.style.overflow = 'hidden';
+
+  const containerWidth = body.clientWidth;
+  if (containerWidth <= 0) return;
+
+  const naturalWidth = wrap.scrollWidth;
+  if (naturalWidth <= containerWidth + 2) return;
+
+  const scale = containerWidth / naturalWidth;
+  wrap.style.width = naturalWidth + 'px';
+  wrap.style.transform = `scale(${scale})`;
+  body.style.height = wrap.scrollHeight * scale + 'px';
 }
 
 function escapeHtml(s: string): string {
