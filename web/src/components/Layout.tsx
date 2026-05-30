@@ -85,7 +85,7 @@ export default function Layout() {
   }, [backFromView]);
 
   return (
-    <div className="relative flex h-full w-full bg-white text-ink-900">
+    <div className="relative flex h-full w-full overflow-hidden bg-white text-ink-900">
       {/* Sidebar — always visible on md+, slide-in on mobile via `pane` */}
       <aside
         className={[
@@ -101,11 +101,12 @@ export default function Layout() {
         />
       </aside>
 
-      {/* Message list — middle pane */}
+      {/* Message list — stays visible under the sliding view on mobile so it's
+          revealed when the view slides off-screen. */}
       <section
         className={[
           'h-full w-full shrink-0 border-r border-ink-200 md:w-[22rem] lg:w-[24rem]',
-          pane === 'list' ? 'block' : 'hidden md:block',
+          pane === 'folders' ? 'hidden md:block' : 'block',
         ].join(' ')}
       >
         <MessageList
@@ -116,11 +117,14 @@ export default function Layout() {
         />
       </section>
 
-      {/* Message view — right pane */}
+      {/* Message view — on mobile, absolute over the list; slide in/out via
+          translateX. On desktop, static and side-by-side. */}
       <main
         className={[
-          'h-full min-w-0 flex-1',
-          pane === 'view' ? 'block' : 'hidden md:block',
+          'h-full min-w-0 bg-white shadow-2xl',
+          'absolute inset-0 z-20 transform-gpu transition-transform duration-[260ms] ease-out',
+          pane === 'view' ? 'translate-x-0' : 'translate-x-full',
+          'md:relative md:inset-auto md:z-auto md:flex-1 md:translate-x-0 md:shadow-none md:transition-none',
         ].join(' ')}
       >
         <MessageView uid={selectedUid} folder={folder} onBack={backFromView} />
@@ -128,7 +132,8 @@ export default function Layout() {
 
       {/* Mobile-only left-edge gesture catcher. Touches inside iframes don't
           bubble to the parent window, so a tiny overlay on the edge guarantees
-          we receive the swipe start. */}
+          we receive the swipe start. Above the sliding main pane so it's
+          always reachable while the view is showing. */}
       {pane === 'view' && (
         <div
           aria-hidden

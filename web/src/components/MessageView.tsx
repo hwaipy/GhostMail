@@ -39,9 +39,11 @@ function buildIframeDoc(html: string): string {
   return `<!doctype html><html><head><meta charset="utf-8"><base target="_blank"><style>${APP_BASE_STYLE}</style></head><body>${html}</body></html>`;
 }
 
-// iframes ignore viewport meta, and CSS `zoom` is flaky inside iframes. Reliable approach:
-// wrap all body children in a div, measure its natural width, scale it with CSS transform,
-// and set body height to the scaled height (transform doesn't shrink the layout box).
+// Wrap body content in a div, measure its natural width, scale with CSS transform.
+// When scaling, position the wrap absolutely and set body to the scaled height so
+// the wrap's un-shrunk layout box doesn't bloat body.scrollHeight (which would
+// leave empty scroll space below) and so we never set body { overflow: hidden }
+// (which CSS propagates to the iframe viewport and kills all scrolling).
 function fitIframe(iframe: HTMLIFrameElement) {
   const doc = iframe.contentDocument;
   if (!doc || !doc.body) return;
@@ -51,15 +53,15 @@ function fitIframe(iframe: HTMLIFrameElement) {
   if (!wrap) {
     wrap = doc.createElement('div');
     wrap.id = '__gm_fit__';
-    wrap.style.transformOrigin = '0 0';
     while (body.firstChild) wrap.appendChild(body.firstChild);
     body.appendChild(wrap);
   }
 
-  wrap.style.transform = '';
-  wrap.style.width = '';
+  // Reset
+  wrap.style.cssText = '';
   body.style.height = '';
-  body.style.overflow = 'hidden';
+  body.style.position = '';
+  body.style.overflow = '';
 
   const containerWidth = body.clientWidth;
   if (containerWidth <= 0) return;
@@ -68,9 +70,16 @@ function fitIframe(iframe: HTMLIFrameElement) {
   if (naturalWidth <= containerWidth + 2) return;
 
   const scale = containerWidth / naturalWidth;
+  const naturalHeight = wrap.scrollHeight;
+
+  body.style.position = 'relative';
+  wrap.style.position = 'absolute';
+  wrap.style.top = '0';
+  wrap.style.left = '0';
+  wrap.style.transformOrigin = '0 0';
   wrap.style.width = naturalWidth + 'px';
   wrap.style.transform = `scale(${scale})`;
-  body.style.height = wrap.scrollHeight * scale + 'px';
+  body.style.height = naturalHeight * scale + 'px';
 }
 
 function escapeHtml(s: string): string {

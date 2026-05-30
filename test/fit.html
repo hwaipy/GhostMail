@@ -25,22 +25,28 @@
       if (!wrap) {
         wrap = doc.createElement('div');
         wrap.id = '__gm_fit__';
-        wrap.style.transformOrigin = '0 0';
         while (body.firstChild) wrap.appendChild(body.firstChild);
         body.appendChild(wrap);
       }
-      wrap.style.transform = '';
-      wrap.style.width = '';
+      // reset
+      wrap.style.cssText = '';
       body.style.height = '';
-      body.style.overflow = 'hidden';
+      body.style.position = '';
+      body.style.overflow = '';
       const containerWidth = body.clientWidth;
       if (containerWidth <= 0) return;
       const naturalWidth = wrap.scrollWidth;
       if (naturalWidth <= containerWidth + 2) return;
       const scale = containerWidth / naturalWidth;
+      const naturalHeight = wrap.scrollHeight;
+      body.style.position = 'relative';
+      wrap.style.position = 'absolute';
+      wrap.style.top = '0';
+      wrap.style.left = '0';
+      wrap.style.transformOrigin = '0 0';
       wrap.style.width = naturalWidth + 'px';
       wrap.style.transform = `scale(${scale})`;
-      body.style.height = wrap.scrollHeight * scale + 'px';
+      body.style.height = naturalHeight * scale + 'px';
     }
     // ===== end =====
 
@@ -50,17 +56,22 @@
       img, video { max-width: 100%; height: auto; }
     `;
 
+    // Tall + wide email so the fitted body height exceeds the iframe height
+    // and we can assert vertical scrolling still works.
+    const paragraphs = Array.from({ length: 30 }, (_, i) =>
+      `<p>Paragraph ${i + 1}. Lorem ipsum dolor sit amet consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p>`
+    ).join('');
     const WIDE_EMAIL = `
       <table width="600" cellpadding="0" cellspacing="0" border="0" style="background:#f0f0f0;">
         <tr><td style="padding:20px;">
-          <h1 style="margin:0 0 10px;">Wide email header</h1>
-          <p>This outer table is fixed at <b>600px</b> wide. On a 393px viewport it should fit visually.</p>
+          <h1 style="margin:0 0 10px;">Wide and tall email</h1>
+          <p>This outer table is fixed at <b>600px</b> wide. On a 393px viewport it should fit.</p>
           <table width="600"><tr>
             <td width="200" style="background:#ffcccc; padding:8px;">left 200</td>
             <td width="200" style="background:#ccffcc; padding:8px;">mid 200</td>
             <td width="200" style="background:#ccccff; padding:8px;">right 200</td>
           </tr></table>
-          <p>Some more text here. Lorem ipsum dolor sit amet consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p>
+          ${paragraphs}
         </td></tr>
       </table>
     `;
@@ -77,18 +88,21 @@
         // input
         containerWidth: document.getElementById('container').clientWidth,
         iframeClientWidth: iframe.clientWidth,
-        // measurements
+        iframeClientHeight: iframe.clientHeight,
+        // horizontal
         bodyClientWidth: body.clientWidth,
-        bodyScrollWidth: body.scrollWidth,
         wrapNaturalScrollWidth: wrap ? wrap.scrollWidth : null,
         wrapTransform: wrap ? wrap.style.transform : null,
-        bodyStyleHeight: body.style.height,
         htmlScrollWidth: html.scrollWidth,
         htmlClientWidth: html.clientWidth,
-        // CRITICAL: does the iframe show horizontal scroll?
         hasHorizontalOverflow: html.scrollWidth > html.clientWidth + 1,
-        // also useful: visual width of wrap after transform
         wrapBoundingRect: wrap ? wrap.getBoundingClientRect().width : null,
+        // vertical: after fit, body height should be the SCALED natural height,
+        // and the document should be scrollable to that height.
+        bodyStyleHeight: body.style.height,
+        htmlScrollHeight: html.scrollHeight,
+        htmlClientHeight: html.clientHeight,
+        canScrollVertically: html.scrollHeight > html.clientHeight + 1,
       };
 
       window.__TEST_RESULT__ = result;

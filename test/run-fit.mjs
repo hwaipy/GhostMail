@@ -44,9 +44,12 @@ try {
   if (result.wrapBoundingRect && result.wrapBoundingRect > result.iframeClientWidth + 1) {
     fail(`wrap visual width ${result.wrapBoundingRect} > iframe ${result.iframeClientWidth}`);
   }
+  if (!result.canScrollVertically) {
+    fail(`document is not vertically scrollable (htmlScrollHeight=${result.htmlScrollHeight}, htmlClientHeight=${result.htmlClientHeight})`);
+  }
 
   if (process.exitCode !== 1) {
-    console.log('\nPASS — wide email fits without horizontal overflow.');
+    console.log('\nPASS — wide email fits horizontally AND scrolls vertically.');
   }
 } finally {
   await browser.close();
