@@ -185,7 +185,7 @@ export default function MessageView({
         <iframe
           ref={iframeRef}
           title="message body"
-          sandbox="allow-popups allow-popups-to-escape-sandbox"
+          sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
           srcDoc={srcDoc}
           onLoad={(e) => {
             const el = e.currentTarget;

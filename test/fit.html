@@ -1,0 +1,102 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>fit test</title>
+<style>
+  body { margin: 0; font-family: sans-serif; }
+  #container { width: 393px; height: 700px; overflow: hidden; border: 2px solid red; }
+  iframe { width: 100%; height: 100%; border: 0; display: block; }
+</style>
+</head>
+<body>
+  <div id="container">
+    <iframe id="msg" sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"></iframe>
+  </div>
+  <pre id="report" style="font:12px monospace; padding:8px;"></pre>
+
+  <script>
+    // ===== fitIframe implementation under test =====
+    function fitIframe(iframe) {
+      const doc = iframe.contentDocument;
+      if (!doc || !doc.body) return;
+      const body = doc.body;
+      let wrap = doc.getElementById('__gm_fit__');
+      if (!wrap) {
+        wrap = doc.createElement('div');
+        wrap.id = '__gm_fit__';
+        wrap.style.transformOrigin = '0 0';
+        while (body.firstChild) wrap.appendChild(body.firstChild);
+        body.appendChild(wrap);
+      }
+      wrap.style.transform = '';
+      wrap.style.width = '';
+      body.style.height = '';
+      body.style.overflow = 'hidden';
+      const containerWidth = body.clientWidth;
+      if (containerWidth <= 0) return;
+      const naturalWidth = wrap.scrollWidth;
+      if (naturalWidth <= containerWidth + 2) return;
+      const scale = containerWidth / naturalWidth;
+      wrap.style.width = naturalWidth + 'px';
+      wrap.style.transform = `scale(${scale})`;
+      body.style.height = wrap.scrollHeight * scale + 'px';
+    }
+    // ===== end =====
+
+    const APP_BASE_STYLE = `
+      html, body { margin: 0; padding: 16px 20px; background: #fff; color: #1a1a1a; }
+      body { font-family: -apple-system, sans-serif; font-size: 14px; line-height: 1.55; }
+      img, video { max-width: 100%; height: auto; }
+    `;
+
+    const WIDE_EMAIL = `
+      <table width="600" cellpadding="0" cellspacing="0" border="0" style="background:#f0f0f0;">
+        <tr><td style="padding:20px;">
+          <h1 style="margin:0 0 10px;">Wide email header</h1>
+          <p>This outer table is fixed at <b>600px</b> wide. On a 393px viewport it should fit visually.</p>
+          <table width="600"><tr>
+            <td width="200" style="background:#ffcccc; padding:8px;">left 200</td>
+            <td width="200" style="background:#ccffcc; padding:8px;">mid 200</td>
+            <td width="200" style="background:#ccccff; padding:8px;">right 200</td>
+          </tr></table>
+          <p>Some more text here. Lorem ipsum dolor sit amet consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p>
+        </td></tr>
+      </table>
+    `;
+
+    const iframe = document.getElementById('msg');
+    iframe.addEventListener('load', () => {
+      fitIframe(iframe);
+      const doc = iframe.contentDocument;
+      const body = doc.body;
+      const html = doc.documentElement;
+      const wrap = doc.getElementById('__gm_fit__');
+
+      const result = {
+        // input
+        containerWidth: document.getElementById('container').clientWidth,
+        iframeClientWidth: iframe.clientWidth,
+        // measurements
+        bodyClientWidth: body.clientWidth,
+        bodyScrollWidth: body.scrollWidth,
+        wrapNaturalScrollWidth: wrap ? wrap.scrollWidth : null,
+        wrapTransform: wrap ? wrap.style.transform : null,
+        bodyStyleHeight: body.style.height,
+        htmlScrollWidth: html.scrollWidth,
+        htmlClientWidth: html.clientWidth,
+        // CRITICAL: does the iframe show horizontal scroll?
+        hasHorizontalOverflow: html.scrollWidth > html.clientWidth + 1,
+        // also useful: visual width of wrap after transform
+        wrapBoundingRect: wrap ? wrap.getBoundingClientRect().width : null,
+      };
+
+      window.__TEST_RESULT__ = result;
+      document.getElementById('report').textContent = JSON.stringify(result, null, 2);
+      document.title = 'DONE';
+    });
+
+    iframe.srcdoc = `<!doctype html><html><head><meta charset="utf-8"><style>${APP_BASE_STYLE}</style></head><body>${WIDE_EMAIL}</body></html>`;
+  </script>
+</body>
+</html>
