@@ -1,0 +1,22 @@
+[Unit]
+Description=GhostMail server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/codes/GhostMail
+EnvironmentFile=/home/ubuntu/codes/GhostMail/server/.env
+Environment=NODE_ENV=production
+Environment=HOST=172.17.0.1
+Environment=PORT=4000
+Environment=PATH=/home/ubuntu/node-v20.18.1-linux-x64/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ExecStart=/home/ubuntu/node-v20.18.1-linux-x64/bin/node server/dist/index.js
+Restart=on-failure
+RestartSec=3
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
