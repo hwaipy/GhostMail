@@ -21,6 +21,41 @@ export interface MessageHeader {
   size: number;
 }
 
+export interface Addr {
+  name?: string;
+  address?: string;
+}
+
+export interface AttachmentMeta {
+  idx: number;
+  filename: string | null;
+  contentType: string;
+  size: number;
+  cid: string | null;
+  inline: boolean;
+}
+
+export interface MessageDetail {
+  uid: number;
+  folder: string;
+  flags: string[];
+  headers: {
+    from: Addr[];
+    to: Addr[];
+    cc: Addr[];
+    bcc: Addr[];
+    replyTo: Addr[];
+    subject: string | null;
+    date: string | null;
+    messageId: string | null;
+    inReplyTo: string | null;
+    references: string[];
+  };
+  html: string | null;
+  text: string | null;
+  attachments: AttachmentMeta[];
+}
+
 export interface MailServerInput {
   host: string;
   port: number;
@@ -120,5 +155,13 @@ export const api = {
   messages(folder: string, limit = 50) {
     const q = new URLSearchParams({ folder, limit: String(limit) });
     return request<{ folder: string; messages: MessageHeader[] }>(`/api/messages?${q}`);
+  },
+  message(folder: string, uid: number) {
+    const q = new URLSearchParams({ folder });
+    return request<MessageDetail>(`/api/messages/${uid}?${q}`);
+  },
+  attachmentUrl(folder: string, uid: number, idx: number) {
+    const q = new URLSearchParams({ folder, idx: String(idx) });
+    return `/api/messages/${uid}/attachments?${q}`;
   },
 };

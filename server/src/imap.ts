@@ -1,4 +1,5 @@
 import { ImapFlow, type ListResponse, type FetchMessageObject } from 'imapflow';
+import { simpleParser, type AddressObject, type ParsedMail } from 'mailparser';
 import { getEmailConfig, type MailServer } from './settings.js';
 
 let client: ImapFlow | null = null;
@@ -7,6 +8,12 @@ let connecting: Promise<ImapFlow> | null = null;
 export class NotConfiguredError extends Error {
   constructor() {
     super('email_not_configured');
+  }
+}
+
+export class MessageNotFoundError extends Error {
+  constructor() {
+    super('message_not_found');
   }
 }
 
@@ -133,4 +140,156 @@ export async function listMessages(
   } finally {
     lock.release();
   }
+}
+
+export interface Addr {
+  name?: string;
+  address?: string;
+}
+
+export interface AttachmentMeta {
+  idx: number;
+  filename: string | null;
+  contentType: string;
+  size: number;
+  cid: string | null;
+  inline: boolean;
+}
+
+export interface MessageDetail {
+  uid: number;
+  folder: string;
+  flags: string[];
+  headers: {
+    from: Addr[];
+    to: Addr[];
+    cc: Addr[];
+    bcc: Addr[];
+    replyTo: Addr[];
+    subject: string | null;
+    date: string | null;
+    messageId: string | null;
+    inReplyTo: string | null;
+    references: string[];
+  };
+  html: string | null;
+  text: string | null;
+  attachments: AttachmentMeta[];
+}
+
+function addrList(a: AddressObject | AddressObject[] | undefined): Addr[] {
+  if (!a) return [];
+  const arr = Array.isArray(a) ? a : [a];
+  const out: Addr[] = [];
+  for (const ao of arr) {
+    for (const x of ao.value ?? []) {
+      out.push({ name: x.name || undefined, address: x.address || undefined });
+    }
+  }
+  return out;
+}
+
+function rewriteCids(html: string, atts: { cid: string | null; idx: number }[], baseUrl: string): string {
+  return html.replace(/(src\s*=\s*["'])cid:([^"']+)(["'])/gi, (_m, p1, cid, p3) => {
+    const found = atts.find((a) => a.cid && a.cid.replace(/^<|>$/g, '') === cid);
+    if (!found) return `${p1}cid:${cid}${p3}`;
+    return `${p1}${baseUrl}${found.idx}${p3}`;
+  });
+}
+
+async function fetchSource(folder: string, uid: number): Promise<Buffer> {
+  const c = await getClient();
+  const lock = await c.getMailboxLock(folder);
+  try {
+    const res = await c.fetchOne(String(uid), { source: true, flags: true, uid: true }, { uid: true });
+    if (!res || !res.source) throw new MessageNotFoundError();
+    return res.source as Buffer;
+  } finally {
+    lock.release();
+  }
+}
+
+async function markSeen(folder: string, uid: number): Promise<string[]> {
+  const c = await getClient();
+  const lock = await c.getMailboxLock(folder);
+  try {
+    try {
+      await c.messageFlagsAdd(String(uid), ['\\Seen'], { uid: true });
+    } catch {
+      /* ignore */
+    }
+    const res = await c.fetchOne(String(uid), { flags: true, uid: true }, { uid: true });
+    if (!res) return [];
+    return Array.from(res.flags ?? []);
+  } finally {
+    lock.release();
+  }
+}
+
+export async function fetchMessage(
+  folder: string,
+  uid: number,
+  attachmentBaseUrl: string,
+): Promise<MessageDetail> {
+  const source = await fetchSource(folder, uid);
+  const parsed: ParsedMail = await simpleParser(source);
+
+  const atts: AttachmentMeta[] = (parsed.attachments ?? []).map((a, idx) => ({
+    idx,
+    filename: a.filename ?? null,
+    contentType: a.contentType ?? 'application/octet-stream',
+    size: a.size ?? 0,
+    cid: a.cid ?? null,
+    inline: (a.contentDisposition ?? '').toLowerCase() === 'inline' || !!a.cid,
+  }));
+
+  let html = parsed.html || null;
+  if (html) {
+    html = rewriteCids(html, atts, attachmentBaseUrl);
+  }
+
+  const flags = await markSeen(folder, uid);
+
+  const refs = parsed.references
+    ? Array.isArray(parsed.references)
+      ? parsed.references
+      : [parsed.references]
+    : [];
+
+  return {
+    uid,
+    folder,
+    flags,
+    headers: {
+      from: addrList(parsed.from),
+      to: addrList(parsed.to),
+      cc: addrList(parsed.cc),
+      bcc: addrList(parsed.bcc),
+      replyTo: addrList(parsed.replyTo),
+      subject: parsed.subject ?? null,
+      date: parsed.date?.toISOString() ?? null,
+      messageId: parsed.messageId ?? null,
+      inReplyTo: parsed.inReplyTo ?? null,
+      references: refs,
+    },
+    html,
+    text: parsed.text ?? null,
+    attachments: atts,
+  };
+}
+
+export async function fetchAttachment(
+  folder: string,
+  uid: number,
+  idx: number,
+): Promise<{ content: Buffer; contentType: string; filename: string | null }> {
+  const source = await fetchSource(folder, uid);
+  const parsed = await simpleParser(source);
+  const att = (parsed.attachments ?? [])[idx];
+  if (!att) throw new MessageNotFoundError();
+  return {
+    content: att.content,
+    contentType: att.contentType ?? 'application/octet-stream',
+    filename: att.filename ?? null,
+  };
 }

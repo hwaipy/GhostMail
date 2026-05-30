@@ -1,4 +1,57 @@
-import { ArrowLeft } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { ArrowLeft, Paperclip, Download, Image as ImageIcon } from 'lucide-react';
+import DOMPurify from 'dompurify';
+import { api, type Addr, type AttachmentMeta } from '../api/client';
+
+function fmtDate(iso: string | null): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return d.toLocaleString([], {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function addrLabel(a: Addr): string {
+  return a.name ? `${a.name} <${a.address ?? ''}>` : a.address ?? '';
+}
+
+function fmtSize(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / 1024 / 1024).toFixed(1)} MB`;
+}
+
+const APP_BASE_STYLE = `
+  html, body { margin: 0; padding: 16px 20px; background: #fff; color: #1a1a1a; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', system-ui, sans-serif; font-size: 14px; line-height: 1.55; word-wrap: break-word; }
+  a { color: #2f74ff; }
+  img, video { max-width: 100%; height: auto; }
+  pre, code { white-space: pre-wrap; word-break: break-word; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  blockquote { border-left: 3px solid #e5e5e5; margin: 0 0 8px; padding: 4px 12px; color: #525252; }
+  table { max-width: 100%; }
+`;
+
+function buildIframeDoc(html: string): string {
+  return `<!doctype html><html><head><meta charset="utf-8"><base target="_blank"><style>${APP_BASE_STYLE}</style></head><body>${html}</body></html>`;
+}
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function textToHtml(text: string): string {
+  return `<pre>${escapeHtml(text)}</pre>`;
+}
 
 export default function MessageView({
   uid,
@@ -9,6 +62,55 @@ export default function MessageView({
   folder: string;
   onBack: () => void;
 }) {
+  const qc = useQueryClient();
+  const [showImages, setShowImages] = useState(false);
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
+
+  useEffect(() => {
+    setShowImages(false);
+  }, [uid, folder]);
+
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['message', folder, uid],
+    queryFn: () => api.message(folder, uid as number),
+    enabled: uid != null,
+    retry: false,
+  });
+
+  useEffect(() => {
+    if (data) {
+      qc.invalidateQueries({ queryKey: ['messages', folder] });
+    }
+  }, [data, folder, qc]);
+
+  const { srcDoc, hadRemoteImages } = useMemo(() => {
+    if (!data) return { srcDoc: '', hadRemoteImages: false };
+    const raw = data.html ?? (data.text ? textToHtml(data.text) : '<p style="color:#a3a3a3">(empty)</p>');
+
+    let remoteFound = false;
+    DOMPurify.removeAllHooks();
+    DOMPurify.addHook('uponSanitizeAttribute', (_node, hookEvent) => {
+      if (hookEvent.attrName === 'src' || hookEvent.attrName === 'background') {
+        const v = String(hookEvent.attrValue || '');
+        if (/^https?:\/\//i.test(v)) {
+          remoteFound = true;
+          if (!showImages) {
+            hookEvent.keepAttr = false;
+          }
+        }
+      }
+    });
+    const clean = DOMPurify.sanitize(raw, {
+      WHOLE_DOCUMENT: false,
+      ALLOW_UNKNOWN_PROTOCOLS: false,
+      FORBID_TAGS: ['script', 'style', 'iframe', 'object', 'embed', 'meta', 'link'],
+      FORBID_ATTR: ['onerror', 'onload', 'onclick', 'onmouseover'],
+      ADD_ATTR: ['target'],
+    });
+
+    return { srcDoc: buildIframeDoc(clean), hadRemoteImages: remoteFound };
+  }, [data, showImages]);
+
   if (uid == null) {
     return (
       <div className="hidden h-full place-items-center text-sm text-ink-400 md:grid">
@@ -17,23 +119,118 @@ export default function MessageView({
     );
   }
 
+  if (isLoading) {
+    return (
+      <div className="flex h-full flex-col bg-white">
+        <ViewHeader folder={folder} onBack={onBack} />
+        <div className="grid flex-1 place-items-center text-sm text-ink-400">Loading…</div>
+      </div>
+    );
+  }
+
+  if (error || !data) {
+    return (
+      <div className="flex h-full flex-col bg-white">
+        <ViewHeader folder={folder} onBack={onBack} />
+        <div className="grid flex-1 place-items-center px-6 text-center text-sm text-red-600">
+          Failed to load message.
+        </div>
+      </div>
+    );
+  }
+
+  const visibleAttachments = data.attachments.filter((a) => !a.inline);
+
   return (
     <div className="flex h-full flex-col bg-white">
-      <header className="flex items-center gap-2 border-b border-ink-200 px-3 py-3 md:px-5">
-        <button
-          onClick={onBack}
-          className="rounded-md p-1.5 text-ink-500 hover:bg-ink-100 md:hidden"
-          aria-label="Back"
-        >
-          <ArrowLeft size={18} />
-        </button>
-        <div className="text-xs text-ink-400">
-          {folder} · #{uid}
+      <ViewHeader folder={folder} onBack={onBack} />
+
+      <div className="flex flex-col gap-3 border-b border-ink-200 px-5 pb-4 pt-5 md:px-7">
+        <h1 className="text-lg font-semibold leading-tight tracking-tight">
+          {data.headers.subject || '(no subject)'}
+        </h1>
+        <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
+          <HeaderRow label="From" addrs={data.headers.from} />
+          <HeaderRow label="To" addrs={data.headers.to} />
+          {data.headers.cc.length > 0 && <HeaderRow label="Cc" addrs={data.headers.cc} />}
+          <span className="text-ink-400">Date</span>
+          <span className="text-ink-700">{fmtDate(data.headers.date)}</span>
         </div>
-      </header>
-      <div className="flex-1 overflow-y-auto px-5 py-6 text-sm text-ink-500">
-        Message body rendering arrives next iteration (parse + sanitize + attachments).
+        {hadRemoteImages && !showImages && (
+          <button
+            onClick={() => setShowImages(true)}
+            className="mt-1 inline-flex w-fit items-center gap-1.5 rounded-md border border-ink-300 px-2.5 py-1 text-xs text-ink-700 hover:bg-ink-50"
+          >
+            <ImageIcon size={12} />
+            Show remote images
+          </button>
+        )}
       </div>
+
+      <div className="min-h-0 flex-1 overflow-hidden">
+        <iframe
+          ref={iframeRef}
+          title="message body"
+          sandbox="allow-popups allow-popups-to-escape-sandbox"
+          srcDoc={srcDoc}
+          className="h-full w-full border-0"
+        />
+      </div>
+
+      {visibleAttachments.length > 0 && (
+        <div className="border-t border-ink-200 bg-ink-50 px-5 py-3 md:px-7">
+          <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-ink-500">
+            <Paperclip size={12} />
+            {visibleAttachments.length} attachment{visibleAttachments.length > 1 ? 's' : ''}
+          </div>
+          <ul className="flex flex-wrap gap-2">
+            {visibleAttachments.map((a) => (
+              <Attachment key={a.idx} a={a} folder={folder} uid={data.uid} />
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
+  );
+}
+
+function HeaderRow({ label, addrs }: { label: string; addrs: Addr[] }) {
+  return (
+    <>
+      <span className="text-ink-400">{label}</span>
+      <span className="text-ink-700">{addrs.map(addrLabel).join(', ') || '—'}</span>
+    </>
+  );
+}
+
+function ViewHeader({ folder, onBack }: { folder: string; onBack: () => void }) {
+  return (
+    <header className="flex items-center gap-2 border-b border-ink-200 px-3 py-3 md:px-5">
+      <button
+        onClick={onBack}
+        className="rounded-md p-1.5 text-ink-500 hover:bg-ink-100 md:hidden"
+        aria-label="Back"
+      >
+        <ArrowLeft size={18} />
+      </button>
+      <div className="text-xs text-ink-400">{folder}</div>
+    </header>
+  );
+}
+
+function Attachment({ a, folder, uid }: { a: AttachmentMeta; folder: string; uid: number }) {
+  const href = api.attachmentUrl(folder, uid, a.idx);
+  return (
+    <li>
+      <a
+        href={href}
+        download={a.filename ?? `attachment-${a.idx}`}
+        className="flex items-center gap-2 rounded-lg border border-ink-200 bg-white px-3 py-2 text-xs text-ink-700 hover:border-accent hover:text-accent"
+      >
+        <Download size={12} />
+        <span className="max-w-[16rem] truncate">{a.filename || `attachment ${a.idx + 1}`}</span>
+        <span className="text-ink-400">· {fmtSize(a.size)}</span>
+      </a>
+    </li>
   );
 }
