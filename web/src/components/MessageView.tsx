@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Paperclip, Download, Image as ImageIcon } from 'lucide-react';
+import { ArrowLeft, Paperclip, Download } from 'lucide-react';
 import DOMPurify from 'dompurify';
 import { api, type Addr, type AttachmentMeta } from '../api/client';
 
@@ -63,12 +63,7 @@ export default function MessageView({
   onBack: () => void;
 }) {
   const qc = useQueryClient();
-  const [showImages, setShowImages] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
-
-  useEffect(() => {
-    setShowImages(false);
-  }, [uid, folder]);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['message', folder, uid],
@@ -83,23 +78,11 @@ export default function MessageView({
     }
   }, [data, folder, qc]);
 
-  const { srcDoc, hadRemoteImages } = useMemo(() => {
-    if (!data) return { srcDoc: '', hadRemoteImages: false };
-    const raw = data.html ?? (data.text ? textToHtml(data.text) : '<p style="color:#a3a3a3">(empty)</p>');
-
-    let remoteFound = false;
+  const srcDoc = useMemo(() => {
+    if (!data) return '';
+    const raw =
+      data.html ?? (data.text ? textToHtml(data.text) : '<p style="color:#a3a3a3">(empty)</p>');
     DOMPurify.removeAllHooks();
-    DOMPurify.addHook('uponSanitizeAttribute', (_node, hookEvent) => {
-      if (hookEvent.attrName === 'src' || hookEvent.attrName === 'background') {
-        const v = String(hookEvent.attrValue || '');
-        if (/^https?:\/\//i.test(v)) {
-          remoteFound = true;
-          if (!showImages) {
-            hookEvent.keepAttr = false;
-          }
-        }
-      }
-    });
     const clean = DOMPurify.sanitize(raw, {
       WHOLE_DOCUMENT: false,
       ALLOW_UNKNOWN_PROTOCOLS: false,
@@ -107,9 +90,8 @@ export default function MessageView({
       FORBID_ATTR: ['onerror', 'onload', 'onclick', 'onmouseover'],
       ADD_ATTR: ['target'],
     });
-
-    return { srcDoc: buildIframeDoc(clean), hadRemoteImages: remoteFound };
-  }, [data, showImages]);
+    return buildIframeDoc(clean);
+  }, [data]);
 
   if (uid == null) {
     return (
@@ -156,15 +138,6 @@ export default function MessageView({
           <span className="text-ink-400">Date</span>
           <span className="text-ink-700">{fmtDate(data.headers.date)}</span>
         </div>
-        {hadRemoteImages && !showImages && (
-          <button
-            onClick={() => setShowImages(true)}
-            className="mt-1 inline-flex w-fit items-center gap-1.5 rounded-md border border-ink-300 px-2.5 py-1 text-xs text-ink-700 hover:bg-ink-50"
-          >
-            <ImageIcon size={12} />
-            Show remote images
-          </button>
-        )}
       </div>
 
       <div className="min-h-0 flex-1 overflow-hidden">
