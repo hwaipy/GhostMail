@@ -35,12 +35,22 @@ async function main() {
 
   if (config.nodeEnv === 'production') {
     const webDist = path.resolve(__dirname, '../../web/dist');
-    await app.register(fastifyStatic, { root: webDist });
+    await app.register(fastifyStatic, {
+      root: webDist,
+      setHeaders: (res, filePath) => {
+        if (filePath.endsWith('/index.html') || filePath.endsWith('\\index.html')) {
+          res.setHeader('Cache-Control', 'no-store, must-revalidate');
+        } else if (filePath.includes('/assets/')) {
+          res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        }
+      },
+    });
     app.setNotFoundHandler((req, reply) => {
       if (req.url.startsWith('/api/')) {
         reply.code(404).send({ error: 'not_found' });
         return;
       }
+      reply.header('Cache-Control', 'no-store, must-revalidate');
       reply.sendFile('index.html');
     });
   }

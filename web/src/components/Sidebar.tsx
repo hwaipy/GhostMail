@@ -10,6 +10,7 @@ import {
   X,
   LogOut,
   Settings as SettingsIcon,
+  RotateCcw,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { api, ApiError, type Folder } from '../api/client';
@@ -68,6 +69,24 @@ export default function Sidebar({
     nav('/login', { replace: true });
   }
 
+  async function forceRefresh() {
+    try {
+      if ('caches' in window) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map((k) => caches.delete(k)));
+      }
+      if ('serviceWorker' in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map((r) => r.unregister()));
+      }
+    } catch {
+      /* ignore */
+    }
+    const url = new URL(window.location.href);
+    url.searchParams.set('_r', Date.now().toString());
+    window.location.replace(url.toString());
+  }
+
   const folders = data ? sortFolders(data) : [];
 
   return (
@@ -124,6 +143,13 @@ export default function Sidebar({
         >
           <SettingsIcon size={16} />
           <span>Settings</span>
+        </button>
+        <button
+          onClick={forceRefresh}
+          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-ink-700 hover:bg-ink-200/60"
+        >
+          <RotateCcw size={16} />
+          <span>Force refresh</span>
         </button>
         <button
           onClick={logout}
