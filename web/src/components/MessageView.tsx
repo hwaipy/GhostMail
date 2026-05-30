@@ -36,15 +36,17 @@ const APP_BASE_STYLE = `
 `;
 
 function buildIframeDoc(html: string): string {
-  return `<!doctype html><html><head><meta charset="utf-8"><meta id="vp" name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5"><base target="_blank"><style>${APP_BASE_STYLE}</style></head><body>${html}</body></html>`;
+  return `<!doctype html><html><head><meta charset="utf-8"><base target="_blank"><style>${APP_BASE_STYLE}</style></head><body>${html}</body></html>`;
 }
 
+// `zoom` on documentElement actually shrinks the layout box (unlike transform: scale),
+// works in Chrome/Edge/Safari and Firefox 126+. iframes ignore viewport meta, so this
+// is the reliable way to fit wide email HTML into a narrow iframe.
 function fitIframe(iframe: HTMLIFrameElement) {
   const doc = iframe.contentDocument;
   if (!doc || !doc.body) return;
-  const meta = doc.getElementById('vp');
-  if (!meta) return;
-  meta.setAttribute('content', 'width=device-width, initial-scale=1, maximum-scale=5');
+  const html = doc.documentElement as HTMLElement & { style: CSSStyleDeclaration };
+  html.style.zoom = '';
   const cw = iframe.clientWidth;
   if (cw <= 0) return;
   const sw = Math.max(
@@ -53,11 +55,7 @@ function fitIframe(iframe: HTMLIFrameElement) {
     doc.body.offsetWidth,
   );
   if (sw > cw + 2) {
-    const scale = (cw / sw).toFixed(4);
-    meta.setAttribute(
-      'content',
-      `width=${sw}, initial-scale=${scale}, maximum-scale=5`,
-    );
+    html.style.zoom = String(cw / sw);
   }
 }
 
