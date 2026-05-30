@@ -134,6 +134,15 @@ export default function MessageView({
     return buildIframeDoc(clean);
   }, [data]);
 
+  // Hide iframe before each new srcDoc loads so the user never sees the
+  // un-fitted natural-width paint. onLoad reveals it after fit runs.
+  useEffect(() => {
+    const el = iframeRef.current;
+    if (!el || !srcDoc) return;
+    el.style.visibility = 'hidden';
+    el.srcdoc = srcDoc;
+  }, [srcDoc]);
+
   if (uid == null) {
     return (
       <div className="hidden h-full place-items-center text-sm text-ink-400 md:grid">
@@ -186,13 +195,21 @@ export default function MessageView({
           ref={iframeRef}
           title="message body"
           sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
-          srcDoc={srcDoc}
+          style={{ visibility: 'hidden' }}
           onLoad={(e) => {
             const el = e.currentTarget;
             fitIframe(el);
+            el.style.visibility = 'visible';
             const doc = el.contentDocument;
             doc?.querySelectorAll('img').forEach((img) => {
-              if (!img.complete) img.addEventListener('load', () => fitIframe(el), { once: true });
+              if (!img.complete)
+                img.addEventListener(
+                  'load',
+                  () => {
+                    fitIframe(el);
+                  },
+                  { once: true },
+                );
             });
             setTimeout(() => fitIframe(el), 400);
           }}
