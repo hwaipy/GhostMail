@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Paperclip, Download } from 'lucide-react';
+import { ArrowLeft, Paperclip, Download, Loader2 } from 'lucide-react';
 import DOMPurify from 'dompurify';
 import { api, type Addr, type AttachmentMeta } from '../api/client';
 
@@ -97,6 +97,7 @@ export default function MessageView({
 }) {
   const qc = useQueryClient();
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
+  const [iframeReady, setIframeReady] = useState(false);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['message', folder, uid],
@@ -140,6 +141,7 @@ export default function MessageView({
     const el = iframeRef.current;
     if (!el || !srcDoc) return;
     el.style.visibility = 'hidden';
+    setIframeReady(false);
     el.srcdoc = srcDoc;
   }, [srcDoc]);
 
@@ -190,7 +192,12 @@ export default function MessageView({
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-hidden">
+      <div className="relative min-h-0 flex-1 overflow-hidden">
+        {!iframeReady && (
+          <div className="pointer-events-none absolute inset-0 grid place-items-center bg-white">
+            <Loader2 size={20} className="animate-spin text-ink-400" />
+          </div>
+        )}
         <iframe
           ref={iframeRef}
           title="message body"
@@ -200,6 +207,7 @@ export default function MessageView({
             const el = e.currentTarget;
             fitIframe(el);
             el.style.visibility = 'visible';
+            setIframeReady(true);
             const doc = el.contentDocument;
             doc?.querySelectorAll('img').forEach((img) => {
               if (!img.complete)
