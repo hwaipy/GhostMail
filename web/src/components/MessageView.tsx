@@ -33,11 +33,32 @@ const APP_BASE_STYLE = `
   img, video { max-width: 100%; height: auto; }
   pre, code { white-space: pre-wrap; word-break: break-word; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
   blockquote { border-left: 3px solid #e5e5e5; margin: 0 0 8px; padding: 4px 12px; color: #525252; }
-  table { max-width: 100%; }
 `;
 
 function buildIframeDoc(html: string): string {
-  return `<!doctype html><html><head><meta charset="utf-8"><base target="_blank"><style>${APP_BASE_STYLE}</style></head><body>${html}</body></html>`;
+  return `<!doctype html><html><head><meta charset="utf-8"><meta id="vp" name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5"><base target="_blank"><style>${APP_BASE_STYLE}</style></head><body>${html}</body></html>`;
+}
+
+function fitIframe(iframe: HTMLIFrameElement) {
+  const doc = iframe.contentDocument;
+  if (!doc || !doc.body) return;
+  const meta = doc.getElementById('vp');
+  if (!meta) return;
+  meta.setAttribute('content', 'width=device-width, initial-scale=1, maximum-scale=5');
+  const cw = iframe.clientWidth;
+  if (cw <= 0) return;
+  const sw = Math.max(
+    doc.body.scrollWidth,
+    doc.documentElement.scrollWidth,
+    doc.body.offsetWidth,
+  );
+  if (sw > cw + 2) {
+    const scale = (cw / sw).toFixed(4);
+    meta.setAttribute(
+      'content',
+      `width=${sw}, initial-scale=${scale}, maximum-scale=5`,
+    );
+  }
 }
 
 function escapeHtml(s: string): string {
@@ -77,6 +98,14 @@ export default function MessageView({
       qc.invalidateQueries({ queryKey: ['messages', folder] });
     }
   }, [data, folder, qc]);
+
+  useEffect(() => {
+    const el = iframeRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => fitIframe(el));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   const srcDoc = useMemo(() => {
     if (!data) return '';
@@ -146,6 +175,15 @@ export default function MessageView({
           title="message body"
           sandbox="allow-popups allow-popups-to-escape-sandbox"
           srcDoc={srcDoc}
+          onLoad={(e) => {
+            const el = e.currentTarget;
+            fitIframe(el);
+            const doc = el.contentDocument;
+            doc?.querySelectorAll('img').forEach((img) => {
+              if (!img.complete) img.addEventListener('load', () => fitIframe(el), { once: true });
+            });
+            setTimeout(() => fitIframe(el), 400);
+          }}
           className="h-full w-full border-0"
         />
       </div>
