@@ -1,12 +1,14 @@
 import type { FastifyInstance } from 'fastify';
-import bcrypt from 'bcrypt';
 import { config } from '../config.js';
+import { isInitialized, verifyPassword } from '../settings.js';
 
 export async function authRoutes(app: FastifyInstance) {
   app.post<{ Body: { password?: string } }>('/api/auth/login', async (req, reply) => {
+    if (!(await isInitialized())) {
+      return reply.code(409).send({ error: 'not_initialized' });
+    }
     const password = req.body?.password ?? '';
-    const ok = await bcrypt.compare(password, config.webPasswordHash);
-    if (!ok) {
+    if (!(await verifyPassword(password))) {
       return reply.code(401).send({ error: 'invalid_password' });
     }
     const token = await reply.jwtSign({ sub: 'user' }, { expiresIn: '30d' });

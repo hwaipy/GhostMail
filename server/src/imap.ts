@@ -1,15 +1,21 @@
 import { ImapFlow, type ListResponse, type FetchMessageObject } from 'imapflow';
-import { config } from './config.js';
+import { getEmailConfig, type MailServer } from './settings.js';
 
 let client: ImapFlow | null = null;
 let connecting: Promise<ImapFlow> | null = null;
 
-async function connect(): Promise<ImapFlow> {
+export class NotConfiguredError extends Error {
+  constructor() {
+    super('email_not_configured');
+  }
+}
+
+async function buildClient(imap: MailServer): Promise<ImapFlow> {
   const c = new ImapFlow({
-    host: config.imap.host,
-    port: config.imap.port,
-    secure: config.imap.secure,
-    auth: { user: config.imap.user, pass: config.imap.pass },
+    host: imap.host,
+    port: imap.port,
+    secure: imap.secure,
+    auth: { user: imap.user, pass: imap.pass },
     logger: false,
   });
   await c.connect();
@@ -20,6 +26,12 @@ async function connect(): Promise<ImapFlow> {
     if (client === c) client = null;
   });
   return c;
+}
+
+async function connect(): Promise<ImapFlow> {
+  const cfg = await getEmailConfig();
+  if (!cfg) throw new NotConfiguredError();
+  return buildClient(cfg.imap);
 }
 
 export async function getClient(): Promise<ImapFlow> {
@@ -35,6 +47,32 @@ export async function getClient(): Promise<ImapFlow> {
       });
   }
   return connecting;
+}
+
+export async function resetClient(): Promise<void> {
+  const c = client;
+  client = null;
+  connecting = null;
+  if (c) {
+    try {
+      await c.logout();
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
+export async function testImap(imap: MailServer): Promise<void> {
+  const c = await buildClient(imap);
+  try {
+    await c.list();
+  } finally {
+    try {
+      await c.logout();
+    } catch {
+      /* ignore */
+    }
+  }
 }
 
 export async function listFolders(): Promise<ListResponse[]> {
@@ -54,7 +92,6 @@ export interface MessageHeader {
     messageId: string | null;
   };
   size: number;
-  bodyPreview?: string;
 }
 
 export async function listMessages(

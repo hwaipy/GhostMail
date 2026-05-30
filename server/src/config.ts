@@ -12,19 +12,4 @@ export const config = {
   nodeEnv: process.env.NODE_ENV ?? 'development',
   corsOrigin: process.env.CORS_ORIGIN ?? 'http://localhost:5173',
   jwtSecret: required('JWT_SECRET'),
-  webPasswordHash: required('WEB_PASSWORD_HASH'),
-  imap: {
-    host: required('IMAP_HOST'),
-    port: Number(process.env.IMAP_PORT ?? 993),
-    secure: (process.env.IMAP_SECURE ?? 'true') === 'true',
-    user: required('IMAP_USER'),
-    pass: required('IMAP_PASS'),
-  },
-  smtp: {
-    host: required('SMTP_HOST'),
-    port: Number(process.env.SMTP_PORT ?? 465),
-    secure: (process.env.SMTP_SECURE ?? 'true') === 'true',
-    user: required('SMTP_USER'),
-    pass: required('SMTP_PASS'),
-  },
 };

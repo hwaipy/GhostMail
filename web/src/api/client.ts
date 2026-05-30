@@ -21,29 +21,63 @@ export interface MessageHeader {
   size: number;
 }
 
+export interface MailServerInput {
+  host: string;
+  port: number;
+  secure: boolean;
+  user: string;
+  pass: string;
+}
+
+export interface MaskedMailServer {
+  host: string;
+  port: number;
+  secure: boolean;
+  user: string;
+  passSet: boolean;
+}
+
+export class ApiError extends Error {
+  constructor(
+    public status: number,
+    public code: string,
+    message?: string,
+  ) {
+    super(message ?? code);
+  }
+}
+
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const res = await fetch(path, {
     credentials: 'include',
     headers: { 'Content-Type': 'application/json', ...(init.headers ?? {}) },
     ...init,
   });
-  if (res.status === 401) {
-    throw new UnauthorizedError();
-  }
   if (!res.ok) {
-    const text = await res.text();
-    throw new Error(text || `HTTP ${res.status}`);
+    let code = `http_${res.status}`;
+    let message: string | undefined;
+    try {
+      const j = await res.json();
+      code = j.error ?? code;
+      message = j.message;
+    } catch {
+      /* ignore */
+    }
+    throw new ApiError(res.status, code, message);
   }
   return (await res.json()) as T;
 }
 
-export class UnauthorizedError extends Error {
-  constructor() {
-    super('unauthorized');
-  }
-}
-
 export const api = {
+  setupStatus() {
+    return request<{ initialized: boolean; emailConfigured: boolean }>('/api/setup/status');
+  },
+  setupInit(password: string) {
+    return request<{ ok: true }>('/api/setup/init', {
+      method: 'POST',
+      body: JSON.stringify({ password }),
+    });
+  },
   login(password: string) {
     return request<{ ok: true }>('/api/auth/login', {
       method: 'POST',
@@ -55,6 +89,30 @@ export const api = {
   },
   me() {
     return request<{ authenticated: boolean }>('/api/auth/me');
+  },
+  getEmailSettings() {
+    return request<{
+      configured: boolean;
+      email: { imap: MaskedMailServer; smtp: MaskedMailServer } | null;
+    }>('/api/settings/email');
+  },
+  saveEmailSettings(imap: MailServerInput, smtp: MailServerInput) {
+    return request<{ ok: true }>('/api/settings/email', {
+      method: 'POST',
+      body: JSON.stringify({ imap, smtp }),
+    });
+  },
+  testEmailSettings(imap: MailServerInput, smtp: MailServerInput) {
+    return request<{ imap: string; smtp: string }>('/api/settings/email/test', {
+      method: 'POST',
+      body: JSON.stringify({ imap, smtp }),
+    });
+  },
+  changePassword(currentPassword: string, newPassword: string) {
+    return request<{ ok: true }>('/api/settings/password', {
+      method: 'POST',
+      body: JSON.stringify({ currentPassword, newPassword }),
+    });
   },
   folders() {
     return request<Folder[]>('/api/folders');

@@ -8,6 +8,8 @@ import { fileURLToPath } from 'node:url';
 import { config } from './config.js';
 import { authRoutes } from './routes/auth.js';
 import { mailRoutes } from './routes/mail.js';
+import { setupRoutes } from './routes/setup.js';
+import { settingsRoutes } from './routes/settings.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -24,7 +26,9 @@ async function main() {
     cookie: { cookieName: 'gm_token', signed: false },
   });
 
+  await app.register(setupRoutes);
   await app.register(authRoutes);
+  await app.register(settingsRoutes);
   await app.register(mailRoutes);
 
   app.get('/api/health', async () => ({ ok: true }));

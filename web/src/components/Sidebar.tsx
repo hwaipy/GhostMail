@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Inbox,
   Send,
@@ -9,10 +9,10 @@ import {
   Folder as FolderIcon,
   X,
   LogOut,
+  Settings as SettingsIcon,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { useQueryClient } from '@tanstack/react-query';
-import { api, type Folder } from '../api/client';
+import { api, ApiError, type Folder } from '../api/client';
 
 function iconFor(f: Folder) {
   const su = f.specialUse?.replace('\\', '').toLowerCase();
@@ -53,10 +53,14 @@ export default function Sidebar({
 }) {
   const nav = useNavigate();
   const qc = useQueryClient();
-  const { data, isLoading } = useQuery({
+  const { data, error, isLoading } = useQuery({
     queryKey: ['folders'],
     queryFn: () => api.folders(),
+    retry: false,
   });
+
+  const notConfigured =
+    error instanceof ApiError && error.code === 'email_not_configured';
 
   async function logout() {
     await api.logout();
@@ -81,6 +85,17 @@ export default function Sidebar({
 
       <nav className="scrollbar-thin flex-1 overflow-y-auto px-2 pt-2">
         {isLoading && <div className="px-3 py-2 text-xs text-ink-400">Loading…</div>}
+        {notConfigured && (
+          <div className="px-3 py-2 text-xs text-ink-500">
+            No mailbox configured.
+            <button
+              onClick={() => nav('/settings')}
+              className="ml-1 text-accent hover:underline"
+            >
+              Set it up →
+            </button>
+          </div>
+        )}
         {folders.map((f) => {
           const Icon = iconFor(f);
           const active = f.path === currentFolder;
@@ -102,7 +117,14 @@ export default function Sidebar({
         })}
       </nav>
 
-      <div className="border-t border-ink-200 p-2">
+      <div className="space-y-1 border-t border-ink-200 p-2">
+        <button
+          onClick={() => nav('/settings')}
+          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-ink-700 hover:bg-ink-200/60"
+        >
+          <SettingsIcon size={16} />
+          <span>Settings</span>
+        </button>
         <button
           onClick={logout}
           className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-ink-500 hover:bg-ink-200/60"
