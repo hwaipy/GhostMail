@@ -11,6 +11,7 @@ import {
   LogOut,
   Settings as SettingsIcon,
   RotateCcw,
+  Loader2,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { api, ApiError, type Folder } from '../api/client';
@@ -103,7 +104,11 @@ export default function Sidebar({
       </div>
 
       <nav className="scrollbar-thin flex-1 overflow-y-auto px-2 pt-2">
-        {isLoading && <div className="px-3 py-2 text-xs text-ink-400">Loading…</div>}
+        {isLoading && (
+          <div className="grid place-items-center py-6">
+            <Loader2 size={16} className="animate-spin text-ink-400" />
+          </div>
+        )}
         {notConfigured && (
           <div className="px-3 py-2 text-xs text-ink-500">
             No mailbox configured.

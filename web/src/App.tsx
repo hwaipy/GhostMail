@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
+import { Loader2 } from 'lucide-react';
 import { api } from './api/client';
 import Login from './components/Login';
 import Setup from './components/Setup';
@@ -18,7 +19,11 @@ export default function App() {
   });
 
   if (status.isLoading) {
-    return <div className="grid h-full place-items-center text-sm text-ink-400">Loading…</div>;
+    return (
+      <div className="grid h-full place-items-center">
+        <Loader2 size={22} className="animate-spin text-ink-400" />
+      </div>
+    );
   }
 
   if (!status.data?.initialized) {

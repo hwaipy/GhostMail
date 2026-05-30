@@ -157,7 +157,9 @@ export default function MessageView({
     return (
       <div className="flex h-full flex-col bg-white">
         <ViewHeader folder={folder} onBack={onBack} />
-        <div className="grid flex-1 place-items-center text-sm text-ink-400">Loading…</div>
+        <div className="grid flex-1 place-items-center">
+          <Loader2 size={20} className="animate-spin text-ink-400" />
+        </div>
       </div>
     );
   }

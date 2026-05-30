@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Menu, RefreshCw, Settings as SettingsIcon } from 'lucide-react';
+import { Menu, RefreshCw, Settings as SettingsIcon, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { api, ApiError, type MessageHeader } from '../api/client';
 
@@ -81,7 +81,11 @@ export default function MessageList({
       </header>
 
       <div className="scrollbar-thin flex-1 overflow-y-auto">
-        {isLoading && <div className="px-4 py-3 text-xs text-ink-400">Loading…</div>}
+        {isLoading && (
+          <div className="grid place-items-center py-10">
+            <Loader2 size={20} className="animate-spin text-ink-400" />
+          </div>
+        )}
         {notConfigured && (
           <div className="flex flex-col items-center gap-3 px-6 py-12 text-center">
             <SettingsIcon size={28} className="text-ink-400" />
