@@ -1,0 +1,14 @@
+node_modules
+dist
+dist-tsc-node
+build
+*.tsbuildinfo
+.env
+.env.local
+*.log
+.DS_Store
+.vscode
+.idea
+data/
+*.sqlite
+*.sqlite-journal
