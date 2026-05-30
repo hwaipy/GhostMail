@@ -152,8 +152,9 @@ export const api = {
   folders() {
     return request<Folder[]>('/api/folders');
   },
-  messages(folder: string, limit = 50) {
+  messages(folder: string, limit = 50, beforeUid?: number) {
     const q = new URLSearchParams({ folder, limit: String(limit) });
+    if (beforeUid != null) q.set('beforeUid', String(beforeUid));
     return request<{ folder: string; messages: MessageHeader[] }>(`/api/messages?${q}`);
   },
   message(folder: string, uid: number) {

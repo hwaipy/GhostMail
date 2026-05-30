@@ -41,13 +41,17 @@ export async function mailRoutes(app: FastifyInstance) {
     }
   });
 
-  app.get<{ Querystring: { folder?: string; limit?: string } }>(
+  app.get<{ Querystring: { folder?: string; limit?: string; beforeUid?: string } }>(
     '/api/messages',
     async (req, reply) => {
       const folder = req.query.folder ?? 'INBOX';
       const limit = req.query.limit ? Math.min(200, Number(req.query.limit)) : 50;
+      const beforeUid = req.query.beforeUid ? Number(req.query.beforeUid) : undefined;
+      if (beforeUid != null && (!Number.isInteger(beforeUid) || beforeUid <= 0)) {
+        return reply.code(400).send({ error: 'invalid_beforeUid' });
+      }
       try {
-        const msgs = await listMessages(folder, { limit });
+        const msgs = await listMessages(folder, { limit, beforeUid });
         return { folder, messages: msgs };
       } catch (err) {
         if (err instanceof NotConfiguredError) {

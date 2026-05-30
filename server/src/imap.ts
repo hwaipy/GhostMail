@@ -101,9 +101,25 @@ export interface MessageHeader {
   size: number;
 }
 
+function buildHeader(msg: FetchMessageObject): MessageHeader {
+  return {
+    uid: msg.uid,
+    seq: msg.seq,
+    flags: Array.from(msg.flags ?? []),
+    envelope: {
+      date: msg.envelope?.date ? new Date(msg.envelope.date).toISOString() : null,
+      subject: msg.envelope?.subject ?? null,
+      from: (msg.envelope?.from ?? []).map((a) => ({ name: a.name, address: a.address })),
+      to: (msg.envelope?.to ?? []).map((a) => ({ name: a.name, address: a.address })),
+      messageId: msg.envelope?.messageId ?? null,
+    },
+    size: msg.size ?? 0,
+  };
+}
+
 export async function listMessages(
   folder: string,
-  opts: { limit?: number } = {},
+  opts: { limit?: number; beforeUid?: number } = {},
 ): Promise<MessageHeader[]> {
   const limit = opts.limit ?? 50;
   const c = await getClient();
@@ -113,29 +129,31 @@ export async function listMessages(
     if (!mailbox || typeof mailbox === 'boolean') return [];
     const total = mailbox.exists;
     if (!total) return [];
-    const from = Math.max(1, total - limit + 1);
-    const range = `${from}:${total}`;
+
+    const fetchQuery = { uid: true, flags: true, envelope: true, size: true };
     const out: MessageHeader[] = [];
-    for await (const msg of c.fetch(range, {
-      uid: true,
-      flags: true,
-      envelope: true,
-      size: true,
-    }) as AsyncIterable<FetchMessageObject>) {
-      out.push({
-        uid: msg.uid,
-        seq: msg.seq,
-        flags: Array.from(msg.flags ?? []),
-        envelope: {
-          date: msg.envelope?.date ? new Date(msg.envelope.date).toISOString() : null,
-          subject: msg.envelope?.subject ?? null,
-          from: (msg.envelope?.from ?? []).map((a) => ({ name: a.name, address: a.address })),
-          to: (msg.envelope?.to ?? []).map((a) => ({ name: a.name, address: a.address })),
-          messageId: msg.envelope?.messageId ?? null,
-        },
-        size: msg.size ?? 0,
-      });
+
+    if (opts.beforeUid && opts.beforeUid > 1) {
+      const uids = (await c.search(
+        { uid: `1:${opts.beforeUid - 1}` },
+        { uid: true },
+      )) as number[] | false;
+      if (!uids || uids.length === 0) return [];
+      const sliced = uids.slice(-limit);
+      const range = sliced.join(',');
+      for await (const msg of c.fetch(range, fetchQuery, {
+        uid: true,
+      }) as AsyncIterable<FetchMessageObject>) {
+        out.push(buildHeader(msg));
+      }
+    } else {
+      const from = Math.max(1, total - limit + 1);
+      const range = `${from}:${total}`;
+      for await (const msg of c.fetch(range, fetchQuery) as AsyncIterable<FetchMessageObject>) {
+        out.push(buildHeader(msg));
+      }
     }
+
     return out.sort((a, b) => b.uid - a.uid);
   } finally {
     lock.release();

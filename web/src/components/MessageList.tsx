@@ -1,7 +1,10 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useEffect, useRef } from 'react';
+import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import { Menu, RefreshCw, Settings as SettingsIcon, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { api, ApiError, type MessageHeader } from '../api/client';
+
+const PAGE_SIZE = 50;
 
 function formatDate(iso: string | null): string {
   if (!iso) return '';
@@ -45,14 +48,47 @@ export default function MessageList({
 }) {
   const qc = useQueryClient();
   const nav = useNavigate();
-  const { data, isLoading, isFetching, error } = useQuery({
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+
+  const {
+    data,
+    isLoading,
+    isFetching,
+    isFetchingNextPage,
+    fetchNextPage,
+    hasNextPage,
+    error,
+  } = useInfiniteQuery({
     queryKey: ['messages', folder],
-    queryFn: () => api.messages(folder, 80),
+    queryFn: ({ pageParam }) => api.messages(folder, PAGE_SIZE, pageParam),
+    initialPageParam: undefined as number | undefined,
+    getNextPageParam: (lastPage) => {
+      if (lastPage.messages.length < PAGE_SIZE) return undefined;
+      const oldest = lastPage.messages[lastPage.messages.length - 1];
+      return oldest?.uid;
+    },
     retry: false,
   });
 
-  const notConfigured =
-    error instanceof ApiError && error.code === 'email_not_configured';
+  const notConfigured = error instanceof ApiError && error.code === 'email_not_configured';
+  const messages = data?.pages.flatMap((p) => p.messages) ?? [];
+
+  useEffect(() => {
+    const el = sentinelRef.current;
+    const root = scrollRef.current;
+    if (!el || !root) return;
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting && hasNextPage && !isFetchingNextPage) {
+          fetchNextPage();
+        }
+      },
+      { root, rootMargin: '300px' },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage, messages.length]);
 
   function refresh() {
     qc.invalidateQueries({ queryKey: ['messages', folder] });
@@ -76,11 +112,11 @@ export default function MessageList({
           className="rounded-md p-1.5 text-ink-500 hover:bg-ink-100"
           aria-label="Refresh"
         >
-          <RefreshCw size={16} className={isFetching ? 'animate-spin' : ''} />
+          <RefreshCw size={16} className={isFetching && !isFetchingNextPage ? 'animate-spin' : ''} />
         </button>
       </header>
 
-      <div className="scrollbar-thin flex-1 overflow-y-auto">
+      <div ref={scrollRef} className="scrollbar-thin flex-1 overflow-y-auto">
         {isLoading && (
           <div className="grid place-items-center py-10">
             <Loader2 size={20} className="animate-spin text-ink-400" />
@@ -101,11 +137,11 @@ export default function MessageList({
         {error && !notConfigured && (
           <div className="px-4 py-3 text-xs text-red-600">Failed to load messages.</div>
         )}
-        {data?.messages.length === 0 && (
+        {!isLoading && messages.length === 0 && !error && (
           <div className="px-4 py-6 text-center text-xs text-ink-400">No messages.</div>
         )}
         <ul>
-          {data?.messages.map((m) => {
+          {messages.map((m) => {
             const active = m.uid === selectedUid;
             const unread = isUnread(m);
             return (
@@ -152,6 +188,14 @@ export default function MessageList({
             );
           })}
         </ul>
+        {hasNextPage && (
+          <div ref={sentinelRef} className="grid place-items-center py-4">
+            {isFetchingNextPage && <Loader2 size={16} className="animate-spin text-ink-400" />}
+          </div>
+        )}
+        {!hasNextPage && messages.length >= PAGE_SIZE && (
+          <div className="py-4 text-center text-2xs text-ink-400">No more messages.</div>
+        )}
       </div>
     </div>
   );
