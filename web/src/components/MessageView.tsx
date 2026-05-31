@@ -145,13 +145,51 @@ export default function MessageView({
   }, [data]);
 
   // Hide iframe before each new srcDoc loads so the user never sees the
-  // un-fitted natural-width paint. onLoad reveals it after fit runs.
+  // un-fitted natural-width paint. We reveal as soon as the DOM is parsed
+  // (DOMContentLoaded) rather than waiting for `load` — emails with slow or
+  // broken remote images can stall `load` indefinitely. A hard safety
+  // timeout also forces reveal if everything else fails.
   useEffect(() => {
     const el = iframeRef.current;
     if (!el || !srcDoc) return;
     el.style.visibility = 'hidden';
     setIframeReady(false);
     el.srcdoc = srcDoc;
+
+    let done = false;
+    const reveal = () => {
+      if (done) return;
+      done = true;
+      fitIframe(el);
+      el.style.visibility = 'visible';
+      setIframeReady(true);
+      const doc = el.contentDocument;
+      doc?.querySelectorAll('img').forEach((img) => {
+        if (!img.complete) {
+          img.addEventListener('load', () => fitIframe(el), { once: true });
+        }
+      });
+    };
+
+    // Tick the event loop so the iframe swaps to the new document, then
+    // hook DOMContentLoaded (or fire immediately if already parsed).
+    const earlyTimer = setTimeout(() => {
+      const doc = el.contentDocument;
+      if (!doc) return;
+      if (doc.readyState === 'loading') {
+        doc.addEventListener('DOMContentLoaded', reveal, { once: true });
+      } else {
+        reveal();
+      }
+    }, 0);
+
+    const safetyTimer = setTimeout(reveal, 2000);
+
+    return () => {
+      clearTimeout(earlyTimer);
+      clearTimeout(safetyTimer);
+      done = true;
+    };
   }, [srcDoc]);
 
   if (uid == null) {
