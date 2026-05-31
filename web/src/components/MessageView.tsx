@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Paperclip, Download, Loader2 } from 'lucide-react';
+import { ArrowLeft, Paperclip, Download, Loader2, Folder as FolderIcon } from 'lucide-react';
 import DOMPurify from 'dompurify';
 import { api, type Addr, type AttachmentMeta } from '../api/client';
 
@@ -301,6 +301,7 @@ function HeaderRow({ label, addrs }: { label: string; addrs: Addr[] }) {
 }
 
 function ViewHeader({ folder, onBack }: { folder: string; onBack: () => void }) {
+  const label = folder === 'INBOX' ? 'Inbox' : folder;
   return (
     <header className="flex items-center gap-2 border-b border-ink-200 px-3 py-3 md:px-5">
       <button
@@ -310,7 +311,14 @@ function ViewHeader({ folder, onBack }: { folder: string; onBack: () => void }) 
       >
         <ArrowLeft size={18} />
       </button>
-      <div className="text-xs text-ink-400">{folder}</div>
+      <div className="flex-1" />
+      <span
+        title={folder}
+        className="inline-flex max-w-[12rem] items-center gap-1.5 truncate rounded-full bg-ink-100 px-2.5 py-1 text-2xs font-medium text-ink-700"
+      >
+        <FolderIcon size={11} className="shrink-0" />
+        <span className="truncate">{label}</span>
+      </span>
     </header>
   );
 }
