@@ -1,4 +1,4 @@
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Loader2 } from 'lucide-react';
 import { api } from './api/client';
@@ -50,8 +50,29 @@ export default function App() {
     <Routes>
       <Route path="/login" element={<Navigate to="/" replace />} />
       <Route path="/setup" element={<Navigate to="/" replace />} />
-      <Route path="/settings" element={<Settings />} />
-      <Route path="/*" element={<Layout />} />
+      <Route path="/*" element={<AuthedShell />} />
     </Routes>
+  );
+}
+
+// Layout always mounted underneath; Settings is an absolute overlay that
+// slides in from the right based on URL. State / queries inside both
+// components persist across the slide.
+function AuthedShell() {
+  const location = useLocation();
+  const showSettings = location.pathname.startsWith('/settings');
+  return (
+    <div className="relative h-full w-full overflow-hidden">
+      <Layout />
+      <div
+        aria-hidden={!showSettings}
+        className={[
+          'absolute inset-0 z-40 bg-white transform-gpu transition-transform duration-[260ms] ease-out',
+          showSettings ? 'translate-x-0 shadow-2xl' : 'translate-x-full pointer-events-none',
+        ].join(' ')}
+      >
+        <Settings />
+      </div>
+    </div>
   );
 }
