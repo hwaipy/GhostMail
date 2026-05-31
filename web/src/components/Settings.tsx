@@ -1,8 +1,14 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Check, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Check, AlertCircle, AtSign } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { api, ApiError, type MailServerInput } from '../api/client';
+
+type SectionId = 'accounts';
+
+const SECTIONS: { id: SectionId; label: string; icon: typeof AtSign }[] = [
+  { id: 'accounts', label: 'Accounts', icon: AtSign },
+];
 
 interface ServerForm {
   host: string;
@@ -32,6 +38,53 @@ function toInput(f: ServerForm): MailServerInput {
 
 export default function Settings() {
   const nav = useNavigate();
+  const [section, setSection] = useState<SectionId>('accounts');
+
+  return (
+    <div className="flex h-full w-full flex-col bg-white">
+      <header className="flex items-center gap-3 border-b border-ink-200 px-4 py-3">
+        <button
+          onClick={() => nav(-1)}
+          className="rounded-md p-1.5 text-ink-500 hover:bg-ink-100"
+          aria-label="Back"
+        >
+          <ArrowLeft size={18} />
+        </button>
+        <h1 className="text-sm font-semibold tracking-tight">Settings</h1>
+      </header>
+
+      <div className="flex min-h-0 flex-1">
+        <nav className="w-44 shrink-0 border-r border-ink-200 bg-ink-50 p-2 md:w-56">
+          {SECTIONS.map((s) => {
+            const Icon = s.icon;
+            const active = s.id === section;
+            return (
+              <button
+                key={s.id}
+                onClick={() => setSection(s.id)}
+                className={[
+                  'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm transition',
+                  active
+                    ? 'bg-accent-soft text-accent'
+                    : 'text-ink-700 hover:bg-ink-200/60',
+                ].join(' ')}
+              >
+                <Icon size={16} className="shrink-0" />
+                <span className="truncate">{s.label}</span>
+              </button>
+            );
+          })}
+        </nav>
+
+        <main className="min-w-0 flex-1 overflow-y-auto">
+          {section === 'accounts' && <AccountsPanel />}
+        </main>
+      </div>
+    </div>
+  );
+}
+
+function AccountsPanel() {
   const qc = useQueryClient();
   const { data } = useQuery({ queryKey: ['email-settings'], queryFn: () => api.getEmailSettings() });
 
@@ -97,55 +150,49 @@ export default function Settings() {
   }
 
   return (
-    <div className="flex h-full w-full flex-col bg-white">
-      <header className="flex items-center gap-3 border-b border-ink-200 px-4 py-3">
-        <button
-          onClick={() => nav(-1)}
-          className="rounded-md p-1.5 text-ink-500 hover:bg-ink-100"
-          aria-label="Back"
-        >
-          <ArrowLeft size={18} />
-        </button>
-        <h1 className="text-sm font-semibold tracking-tight">Settings · Email</h1>
-      </header>
-
-      <form onSubmit={onSave} className="flex-1 overflow-y-auto px-6 py-6">
-        <div className="mx-auto max-w-2xl space-y-8">
-          <ServerSection title="IMAP (incoming)" value={imap} onChange={setImap} />
-          <ServerSection title="SMTP (outgoing)" value={smtp} onChange={setSmtp} />
-
-          {testResult && (
-            <div className="space-y-1 rounded-lg border border-ink-200 bg-ink-50 px-4 py-3 text-sm">
-              <ResultLine label="IMAP" result={testResult.imap} />
-              <ResultLine label="SMTP" result={testResult.smtp} />
-            </div>
-          )}
-
-          {saveOk && (
-            <p className="text-sm text-green-700">Saved. Mail should now load.</p>
-          )}
-          {saveErr && <p className="text-sm text-red-600">{saveErr}</p>}
-
-          <div className="flex items-center gap-3 border-t border-ink-200 pt-6">
-            <button
-              type="button"
-              onClick={onTest}
-              disabled={testing || saving}
-              className="rounded-lg border border-ink-300 px-4 py-2 text-sm font-medium text-ink-700 hover:bg-ink-50 disabled:opacity-40"
-            >
-              {testing ? 'Testing…' : 'Test connection'}
-            </button>
-            <button
-              type="submit"
-              disabled={saving || testing}
-              className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white transition disabled:opacity-40"
-            >
-              {saving ? 'Saving…' : 'Save'}
-            </button>
-          </div>
+    <form onSubmit={onSave} className="px-5 py-6 md:px-8">
+      <div className="mx-auto max-w-2xl space-y-8">
+        <div>
+          <h2 className="text-lg font-semibold tracking-tight">Accounts</h2>
+          <p className="mt-1 text-xs text-ink-500">
+            IMAP for receiving, SMTP for sending. Credentials are stored on the server in
+            <code className="mx-1 rounded bg-ink-100 px-1 py-0.5 text-2xs">data/config.json</code>
+            with 0600 permissions.
+          </p>
         </div>
-      </form>
-    </div>
+
+        <ServerSection title="IMAP (incoming)" value={imap} onChange={setImap} />
+        <ServerSection title="SMTP (outgoing)" value={smtp} onChange={setSmtp} />
+
+        {testResult && (
+          <div className="space-y-1 rounded-lg border border-ink-200 bg-ink-50 px-4 py-3 text-sm">
+            <ResultLine label="IMAP" result={testResult.imap} />
+            <ResultLine label="SMTP" result={testResult.smtp} />
+          </div>
+        )}
+
+        {saveOk && <p className="text-sm text-green-700">Saved. Mail should now load.</p>}
+        {saveErr && <p className="text-sm text-red-600">{saveErr}</p>}
+
+        <div className="flex items-center gap-3 border-t border-ink-200 pt-6">
+          <button
+            type="button"
+            onClick={onTest}
+            disabled={testing || saving}
+            className="rounded-lg border border-ink-300 px-4 py-2 text-sm font-medium text-ink-700 hover:bg-ink-50 disabled:opacity-40"
+          >
+            {testing ? 'Testing…' : 'Test connection'}
+          </button>
+          <button
+            type="submit"
+            disabled={saving || testing}
+            className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white transition disabled:opacity-40"
+          >
+            {saving ? 'Saving…' : 'Save'}
+          </button>
+        </div>
+      </div>
+    </form>
   );
 }
 
@@ -178,7 +225,7 @@ function ServerSection({
   }
   return (
     <section className="space-y-3">
-      <h2 className="text-sm font-semibold tracking-tight text-ink-900">{title}</h2>
+      <h3 className="text-sm font-semibold tracking-tight text-ink-900">{title}</h3>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <Field label="Host" className="sm:col-span-2">
           <input
@@ -219,7 +266,7 @@ function ServerSection({
             type="password"
             value={value.pass}
             onChange={(e) => patch({ pass: e.target.value })}
-            placeholder="Stored on server, 0600 permissions"
+            placeholder="Leave unchanged to keep current"
             autoComplete="new-password"
             className={inputCls}
           />
