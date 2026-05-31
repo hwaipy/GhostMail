@@ -282,7 +282,7 @@ export default function MessageView({
           </div>
           <ul className="flex flex-wrap gap-2">
             {visibleAttachments.map((a) => (
-              <Attachment key={a.idx} a={a} folder={folder} uid={data.uid} />
+              <Attachment key={a.part} a={a} folder={folder} uid={data.uid} />
             ))}
           </ul>
         </div>
@@ -316,16 +316,16 @@ function ViewHeader({ folder, onBack }: { folder: string; onBack: () => void }) 
 }
 
 function Attachment({ a, folder, uid }: { a: AttachmentMeta; folder: string; uid: number }) {
-  const href = api.attachmentUrl(folder, uid, a.idx);
+  const href = api.attachmentUrl(folder, uid, a.part);
   return (
     <li>
       <a
         href={href}
-        download={a.filename ?? `attachment-${a.idx}`}
+        download={a.filename ?? `attachment-${a.part}`}
         className="flex items-center gap-2 rounded-lg border border-ink-200 bg-white px-3 py-2 text-xs text-ink-700 hover:border-accent hover:text-accent"
       >
         <Download size={12} />
-        <span className="max-w-[16rem] truncate">{a.filename || `attachment ${a.idx + 1}`}</span>
+        <span className="max-w-[16rem] truncate">{a.filename || `attachment ${a.part}`}</span>
         <span className="text-ink-400">· {fmtSize(a.size)}</span>
       </a>
     </li>

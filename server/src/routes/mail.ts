@@ -71,7 +71,7 @@ export async function mailRoutes(app: FastifyInstance) {
         return reply.code(400).send({ error: 'invalid_uid' });
       }
       const folder = req.query.folder ?? 'INBOX';
-      const baseUrl = `/api/messages/${uid}/attachments?folder=${encodeURIComponent(folder)}&idx=`;
+      const baseUrl = `/api/messages/${uid}/attachments?folder=${encodeURIComponent(folder)}&part=`;
       try {
         return await fetchMessage(folder, uid, baseUrl);
       } catch (err) {
@@ -89,16 +89,16 @@ export async function mailRoutes(app: FastifyInstance) {
 
   app.get<{
     Params: { uid: string };
-    Querystring: { folder?: string; idx?: string };
+    Querystring: { folder?: string; part?: string };
   }>('/api/messages/:uid/attachments', async (req, reply) => {
     const uid = Number(req.params.uid);
-    const idx = Number(req.query.idx);
-    if (!Number.isInteger(uid) || uid <= 0 || !Number.isInteger(idx) || idx < 0) {
+    const part = (req.query.part ?? '').toString();
+    if (!Number.isInteger(uid) || uid <= 0 || !/^[0-9]+(\.[0-9]+)*$/.test(part)) {
       return reply.code(400).send({ error: 'invalid_params' });
     }
     const folder = req.query.folder ?? 'INBOX';
     try {
-      const { content, contentType, filename } = await fetchAttachment(folder, uid, idx);
+      const { content, contentType, filename } = await fetchAttachment(folder, uid, part);
       reply.header('Content-Type', contentType);
       if (filename) {
         const safe = filename.replace(/[\r\n"]/g, '_');

@@ -27,7 +27,7 @@ export interface Addr {
 }
 
 export interface AttachmentMeta {
-  idx: number;
+  part: string;
   filename: string | null;
   contentType: string;
   size: number;
@@ -161,8 +161,8 @@ export const api = {
     const q = new URLSearchParams({ folder });
     return request<MessageDetail>(`/api/messages/${uid}?${q}`);
   },
-  attachmentUrl(folder: string, uid: number, idx: number) {
-    const q = new URLSearchParams({ folder, idx: String(idx) });
+  attachmentUrl(folder: string, uid: number, part: string) {
+    const q = new URLSearchParams({ folder, part });
     return `/api/messages/${uid}/attachments?${q}`;
   },
 };
